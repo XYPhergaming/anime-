@@ -11,19 +11,33 @@ import {
   fetchNewsRSS, nekosCelebrate
 } from './api.js';
 
-// ----- Firebase Admin init (singleton) -----
-if (!admin.apps.length) {
-  const pk = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: pk
-    })
-  });
+// ----- Firebase Admin init (defensive) -----
+let db = null;
+try {
+  if (!admin.apps.length) {
+    const pk = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && pk) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: pk
+        })
+      });
+    } else {
+      console.error('[FIREBASE] Missing env vars: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY');
+    }
+  }
+  if (admin.apps.length) db = admin.firestore();
+} catch (e) {
+  console.error('[FIREBASE INIT FAILED]', e?.message || e);
+  db = null;
 }
-const db = admin.firestore();
-const FV = admin.firestore.FieldValue;
+
+export function isReady() { return db !== null; }
+
+let FV = null;
+try { FV = admin.firestore.FieldValue; } catch (e) { /* until init */ }
 
 // ----- Constants -----
 const DEFAULT_CONFIG = {
@@ -115,7 +129,10 @@ export async function exchangeGoogleCode(code, baseUrl) {
   });
   const j = await r.json();
   if (!j.id_token) throw new Error('Google token exchange failed');
-  const payload = JSON.parse(Buffer.from(j.id_token.split('.')[1], 'base64').toString('utf-8'));
+  // JWT uses base64url encoding
+  const b64 = j.id_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - b64.length % 4) % 4);
+  const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
   return {
     sub: payload.sub,
     email: payload.email,
@@ -172,6 +189,7 @@ export async function completeSetup(uid, name, avatar) {
   await db.collection('users').doc(uid).update(updates);
   return updates;
 }
+
 export async function updateProfile(uid, name, avatar) {
   name = safeString(name, 60);
   if (!name) throw new Error('Name required.');
@@ -734,7 +752,6 @@ export async function celebrate() {
   catch (e) { return null; }
 }
 
-// Vercel-safe 404 for direct access
 export default function handler(req, res) {
   res.status(404).json({ error: 'Not found' });
 }
