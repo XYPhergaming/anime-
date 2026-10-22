@@ -6,7 +6,6 @@
     { "source": "/frontend.js", "destination": "/frontend/frontend.js" }
   ],
   "functions": {
-    "api/[...path].js": { "memory": 1024, "maxDuration": 30 },
     "api/backend.js": { "memory": 1024, "maxDuration": 30 }
   }
 }
