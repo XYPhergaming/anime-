@@ -1,7 +1,11 @@
 {
-  "version": 2,
   "rewrites": [
-    { "source": "/api/backend", "destination": "/api/backend" },
-    { "source": "/api/:path*", "destination": "/api/backend?p=:path" }
-  ]
+    { "source": "/api/(.*)", "destination": "/api/backend" },
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/style.css", "destination": "/frontend/style.css" },
+    { "source": "/frontend.js", "destination": "/frontend/frontend.js" }
+  ],
+  "functions": {
+    "api/backend.js": { "memory": 1024, "maxDuration": 30 }
+  }
 }
